@@ -11,6 +11,12 @@ deno_core = "0.149.0"
 url = { version = "2.2.2", features = ["serde"] }
 futures = "0.3.21"
 anyhow = "1.0.57"
+deno_runtime = "0.75.0"
+deno_broadcast_channel = "0.61.0"
+tokio = { version = "1.19", features = ["full"] }
 
 [lib]
 crate-type = ["cdylib"]
+
+[patch.crates-io]
+ext-php-rs = { path = 'deps/ext-php-rs' }
