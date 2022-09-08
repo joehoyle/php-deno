@@ -1,0 +1,16 @@
+[package]
+name = "php-deno"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ext-php-rs = "0.8.0"
+deno_core = "0.149.0"
+url = { version = "2.2.2", features = ["serde"] }
+futures = "0.3.21"
+anyhow = "1.0.57"
+
+[lib]
+crate-type = ["cdylib"]
