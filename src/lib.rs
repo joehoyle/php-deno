@@ -8,6 +8,10 @@ use ext_php_rs::{
 use futures::future::FutureExt;
 use std::collections::HashMap;
 
+/// The Deno main worker. This includes a JsRuntime along with all the standard ops from Deno CLI,
+/// such as Deno.core.* and the web APIs such as TextEncoder etc. Use the MainWorker if you want to
+/// run programs that are written to run in Deno. The Deno provided ops such as `fetch()` uses it's own
+/// TLS and request stack.
 #[php_class(name = "Deno\\Runtime\\MainWorker")]
 struct MainWorker {
     deno_main_worker: deno_runtime::worker::MainWorker,
@@ -21,7 +25,7 @@ fn get_error_class_name(e: &deno_core::error::AnyError) -> &'static str {
 #[php_impl(rename_methods = "none")]
 impl MainWorker {
     #[constructor]
-    fn new() -> Self {
+    fn __construct() -> Self {
         let module_loader = std::rc::Rc::new(deno_core::FsModuleLoader);
         let create_web_worker_cb = std::sync::Arc::new(|_| {
             todo!("Web workers are not supported in the example");
@@ -105,11 +109,17 @@ impl MainWorker {
     }
 }
 
+/// The options provided to the JsRuntime. Pass an instance of this class
+/// to Deno\Core\JsRuntime.
 #[php_class(name = "Deno\\Core\\RuntimeOptions")]
 #[derive(Debug)]
 struct RuntimeOptions {
+    /// The module loader accepts a callable which is responsible for loading
+    /// ES6 modules from a given name. The loader is in the form `function ( string $specifier ) : Deno\Core\ModuleSource`
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     module_loader: Option<CloneableZval>,
+    /// Extensions allow you to add additional functionality via Deno "ops" to the JsRuntime. `extensions` takes an array of
+    /// Deno\Core\Extension instances. See Deno\Core\Extension for details on the PHP <=> JS functions bridge.
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     extensions: Vec<Extension>,
 }
@@ -117,7 +127,7 @@ struct RuntimeOptions {
 #[php_impl(rename_methods = "none")]
 impl RuntimeOptions {
     #[constructor]
-    fn new() -> Self {
+    fn __construct() -> Self {
         Self {
             module_loader: None,
             extensions: vec![],
@@ -177,6 +187,10 @@ impl From<&RuntimeOptions> for deno_core::RuntimeOptions {
 }
 
 #[php_class(name = "Deno\\Core\\JsRuntime")]
+/// The JsRuntime is a wrapper around a V8 isolate. It can execute ES6 including ES6 modules. The JsRuntime
+/// does not include any of the Deno.core.* ops, and does not provide implementations for web apis, such as
+/// fetch(). Use JsRuntime if you want to provide low-level v8 isolates, and implement extensions for all
+/// functionality such as local storage, remote requests etc.
 struct JsRuntime {
     deno_jsruntime: deno_core::JsRuntime,
 }
@@ -184,7 +198,7 @@ struct JsRuntime {
 #[php_impl(rename_methods = "none")]
 impl JsRuntime {
     #[constructor]
-    fn new(options: &RuntimeOptions) -> Self {
+    fn __construct(options: &RuntimeOptions) -> Self {
 
         let mut deno_jsruntime = deno_core::JsRuntime::new(options.into());
         let mut callbacks: HashMap<String, CloneableZval> = HashMap::new();
@@ -273,7 +287,7 @@ struct JsFile {
 #[php_impl(rename_methods = "none")]
 impl JsFile {
     #[constructor]
-    fn new(filename: String, code: String) -> Self {
+    fn __construct(filename: String, code: String) -> Self {
         Self { filename, code }
     }
 }
@@ -290,7 +304,7 @@ struct Extension {
 #[php_impl(rename_methods = "none")]
 impl Extension {
     #[constructor]
-    fn new() -> Self {
+    fn __construct() -> Self {
         Self {
             js_files: vec![],
             ops: HashMap::new(),
@@ -392,7 +406,7 @@ struct ModuleSource {
 #[php_impl(rename_methods = "none")]
 impl ModuleSource {
     #[constructor]
-    fn new(
+    fn __construct(
         code: String,
         module_type: String,
         module_url_specified: String,
