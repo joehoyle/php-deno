@@ -2,7 +2,9 @@
 
 # JsFile
 
-
+JsFile is a descriptor for JavaScript files that are loaded as
+part of the Extension->js_files array. The `code` of `JsFile` is
+executed when the JsRuntime is initiated.
 
 
 
@@ -13,12 +15,12 @@
 ## Properties
 
 
-### code
+### filename
 
 
 
 ```php
-public $code
+public $filename
 ```
 
 
@@ -28,12 +30,12 @@ public $code
 
 ***
 
-### filename
+### code
 
 
 
 ```php
-public $filename
+public $code
 ```
 
 

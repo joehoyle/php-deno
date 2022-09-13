@@ -4,6 +4,47 @@
 
 namespace Deno\Core {
     /**
+     * Extension contains PHP functions (ops) and associated js files which are
+     * exposed to JavaScript via the JsRuntime. PHP functions can be called from JavaScript
+     * via `Deno.core.$name` where `$name` is the array key string from the `ops` property.
+     *
+     * It's common to provide `ops` and also more user-friendly accessible functions for those
+     * `ops` via the `js_files` property.
+     */
+    class Extension {
+        public $ops;
+
+        public $js_files;
+
+        public function __construct() {}
+    }
+
+    class ModuleSource {
+        public $module_url_found;
+
+        public $module_type;
+
+        public $module_url_specified;
+
+        public $code;
+
+        public function __construct(string $code, string $module_type, string $module_url_specified, string $module_url_found) {}
+    }
+
+    /**
+     * JsFile is a descriptor for JavaScript files that are loaded as
+     * part of the Extension->js_files array. The `code` of `JsFile` is
+     * executed when the JsRuntime is initiated.
+     */
+    class JsFile {
+        public $filename;
+
+        public $code;
+
+        public function __construct(string $filename, string $code) {}
+    }
+
+    /**
      * The options provided to the JsRuntime. Pass an instance of this class
      * to Deno\Core\JsRuntime.
      */
@@ -19,22 +60,6 @@ namespace Deno\Core {
          * Deno\Core\Extension instances. See Deno\Core\Extension for details on the PHP <=> JS functions bridge.
          */
         public $extensions;
-
-        public function __construct() {}
-    }
-
-    class JsFile {
-        public $code;
-
-        public $filename;
-
-        public function __construct(string $filename, string $code) {}
-    }
-
-    class Extension {
-        public $ops;
-
-        public $js_files;
 
         public function __construct() {}
     }
@@ -55,18 +80,6 @@ namespace Deno\Core {
         public function mod_evaluate(int $id): mixed {}
 
         public function run_event_loop(): mixed {}
-    }
-
-    class ModuleSource {
-        public $module_url_found;
-
-        public $module_type;
-
-        public $module_url_specified;
-
-        public $code;
-
-        public function __construct(string $code, string $module_type, string $module_url_specified, string $module_url_found) {}
     }
 }
 

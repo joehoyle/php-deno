@@ -275,6 +275,9 @@ impl ModuleLoader {
     }
 }
 
+/// JsFile is a descriptor for JavaScript files that are loaded as
+/// part of the Extension->js_files array. The `code` of `JsFile` is
+/// executed when the JsRuntime is initiated.
 #[php_class(name = "Deno\\Core\\JsFile")]
 #[derive(Clone, Debug)]
 struct JsFile {
@@ -292,6 +295,12 @@ impl JsFile {
     }
 }
 
+/// Extension contains PHP functions (ops) and associated js files which are
+/// exposed to JavaScript via the JsRuntime. PHP functions can be called from JavaScript
+/// via `Deno.core.$name` where `$name` is the array key string from the `ops` property.
+///
+/// It's common to provide `ops` and also more user-friendly accessible functions for those
+/// `ops` via the `js_files` property.
 #[php_class(name = "Deno\\Core\\Extension")]
 #[derive(Clone, Debug)]
 struct Extension {
