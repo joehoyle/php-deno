@@ -679,7 +679,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79b0fbe1787762b87506922f9b4f3493c28c5f67fd71391bbdeeb11c77e2c8e2"
 dependencies = [
  "anyhow",
- "deno_ops",
+ "deno_ops 0.27.0",
  "futures",
  "indexmap",
  "libc",
@@ -840,6 +840,20 @@ name = "deno_ops"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27aa39afc249c59dabc4f207278380502012afcbac7aff13cfa879f794402dbd"
+dependencies = [
+ "once_cell",
+ "proc-macro-crate",
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "regex",
+ "syn 1.0.99",
+]
+
+[[package]]
+name = "deno_ops"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ea4f6ae41994d2757253ca09cb00b54ed7ce062076c6d4b6e9ccc343f387e3f"
 dependencies = [
  "once_cell",
  "proc-macro-crate",
@@ -2390,11 +2404,13 @@ dependencies = [
  "anyhow",
  "deno_broadcast_channel",
  "deno_core",
+ "deno_ops 0.28.0",
  "deno_runtime",
  "ext-php-rs",
  "futures",
  "tokio",
  "url",
+ "v8",
 ]
 
 [[package]]

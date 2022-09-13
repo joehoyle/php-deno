@@ -1,28 +1,29 @@
 <?php
 
-$source = new Deno\ModuleSource( 'Deno.core.print("Im a module")', 'javascript', 'foo.ts', 'foo.ts' );
-
-$extension = new Deno\Extension();
-$extension->js_files = [
-    new Deno\JsFile( 'fetch.js', 'async function fetch() { return "HI" }' ),
+$source = new Deno\Core\ModuleSource( 'Deno.core.print("Im a module")', 'javascript', 'foo.ts', 'foo.ts' );
+$extension = new Deno\Core\Extension();
+$extension->ops = [
+    'php_callback' => function ( int $num, int $add ) : int {
+        return $num + $add;
+    },
 ];
 
-$runtime_options = new Deno\RuntimeOptions();
-$runtime_options->module_loader = function ( string $specifier ) : Deno\ModuleSource {
+$runtime_options = new Deno\Core\RuntimeOptions();
+$runtime_options->module_loader = function ( string $specifier ) : Deno\Core\ModuleSource {
     if ( strpos( $specifier, 'https://' ) === 0 ) {
         $contents = file_get_contents( $specifier );
     } else {
         $contents = '';
     }
-    $source = new Deno\ModuleSource( $contents, 'javascript', $specifier, $specifier );
+    $source = new Deno\Core\ModuleSource( $contents, 'javascript', $specifier, $specifier );
     return $source;
 };
 
 $runtime_options->extensions = [ $extension ];
 
-$js_runtime = new Deno\JsRuntime( $runtime_options );
+$js_runtime = new Deno\Core\JsRuntime( $runtime_options );
 
-$module_id = $js_runtime->load_main_module('file:///main.js', 'Deno.core.ops.op_nodp()');
+$module_id = $js_runtime->load_main_module('file:///main.js', 'Deno.core.print(String(Deno.core.ops.php_callback(1, 2)))');
 
-var_dump( $js_runtime->mod_evaluate($module_id) );
+$js_runtime->mod_evaluate($module_id);
 // $js_runtime->run_event_loop();
