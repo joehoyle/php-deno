@@ -1,0 +1,127 @@
+name: Build
+
+on: [push]
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    strategy:
+      matrix:
+        include:
+        -
+          target: x86_64-unknown-linux-gnu
+          platform: linux/amd64
+          php-version: '8.0'
+        -
+          os: ubuntu-latest
+          target: aarch64-unknown-linux-gnu
+          platform: linux/arm64
+          php-version: '8.0'
+        -
+          target: x86_64-unknown-linux-gnu
+          platform: linux/amd64
+          php-version: '8.1'
+        -
+          os: ubuntu-latest
+          target: aarch64-unknown-linux-gnu
+          platform: linux/arm64
+          php-version: '8.1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          driver-opts: network=host
+
+      - name: Setup docker
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: localhost:5000/php-deno-build:latest
+          build-args: |
+            FROM_PHP=${{ matrix.php-version }}
+
+      - name: Build
+        run: docker run --rm -v $PWD:/code localhost:5000/php-deno-build:latest bash -c 'rustup target add ${{ matrix.target }} ; cargo build --release --target ${{ matrix.target }}'
+
+      - name: Rename file
+        run: cp target/${{ matrix.target }}/release/libphp_deno.so php${{ matrix.php-version }}-${{ matrix.target }}-libphp_deno.so
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: php${{ matrix.php-version }}-${{ matrix.target }}
+          path: php${{ matrix.php-version }}-${{ matrix.target }}-libphp_deno.so
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            php${{ matrix.php-version }}-${{ matrix.target }}-libphp_deno.so
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+        -
+          target: aarch64-apple-darwin
+          php-version: '8.0'
+        -
+          target: x86_64-apple-darwin
+          php-version: '8.0'
+        -
+          target: aarch64-apple-darwin
+          php-version: '8.1'
+        -
+          target: x86_64-apple-darwin
+          php-version: '8.1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v1
+
+      - name: Install latest rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          default: true
+          override: true
+      - name: Setup PHP version
+        run: brew install php@${{ matrix.php-version }} && brew unlink php && brew link --force php@${{ matrix.php-version }}
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          use-cross: ${{ matrix.cross }}
+          command: build
+          args: --release --target ${{ matrix.target }} --lib
+
+      - name: Rename file
+        run: mv target/${{ matrix.target }}/release/libphp_deno.dylib target/php${{ matrix.php-version }}-${{ matrix.target }}-libphp_deno.dylib
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: php${{ matrix.php-version }}-${{ matrix.target }}
+          path: target/php${{ matrix.php-version }}-${{ matrix.target }}-libphp_deno.dylib
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            target/php${{ matrix.php-version }}-${{ matrix.target }}-libphp_deno.dylib
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
