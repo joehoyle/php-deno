@@ -400,16 +400,22 @@ impl deno_core::ModuleLoader for ModuleLoader {
     }
 }
 
+/// ModuleSource represents an ES6 module, including the source code and type. An ModuleSource should
+/// be returned from your module loader passed to JsRuntime's RuntimeOptions::module_loader property.
 #[php_class(name = "Deno\\Core\\ModuleSource")]
 #[derive(Debug)]
 struct ModuleSource {
+    /// The module's source code.
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     code: String,
+    /// The module type, can be "javascript" or "json".
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     module_type: String,
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    /// The specified module URL of the import.
     module_url_specified: String,
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    /// The resolved module URL, after things like 301 redrects etc.
     module_url_found: String,
 }
 
@@ -431,12 +437,17 @@ impl ModuleSource {
     }
 }
 
+/// ParseParams represent the arguments for Deno\AST\parse_module, which is used to
+/// parse TypeScript.
 #[php_class(name = "Deno\\AST\\ParseParams")]
 struct ParseParams {
+    /// The ES6 module specifier, must be a URL.
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     specifier: String,
+    /// The source code of the ES6 module.
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     text_info: String,
+    /// The type of the module, specified as a mime-type such as application/typescript etc.
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     media_type: String,
 }
@@ -474,6 +485,7 @@ impl TryFrom<&ParseParams> for deno_ast::ParseParams {
     }
 }
 
+/// The transpiled code to TypeScript source code, this is the result of `Deno\AST\ParsedSource::transpile().
 #[php_class(name = "Deno\\AST\\TranspiledSource")]
 struct TranspiledSource {
     /// Transpiled text.
@@ -489,8 +501,10 @@ struct ParsedSource {
     deno_ast_parsed_source: deno_ast::ParsedSource,
 }
 
+/// Represents the parsed AST via `Deno\AST\parse_modue()`.
 #[php_impl(rename_methods = "none")]
 impl ParsedSource {
+    /// Transpile the ASP to TypeScript, with the provided EmitOptions. Throws an exception or returns Deno\AST\TranspiledSource
     fn transpile(&self, options: &EmitOptions) -> PhpResult<TranspiledSource> {
         match self.deno_ast_parsed_source.transpile( &options.into() ) {
             Ok(transpiled_source) => Ok(TranspiledSource {
@@ -502,6 +516,7 @@ impl ParsedSource {
     }
 }
 
+/// TypeScript compiler options used when transpiling.
 #[php_class(name = "Deno\\AST\\EmitOptions")]
 struct EmitOptions {
     /// When emitting a legacy decorator, also emit experimental decorator meta
@@ -589,6 +604,7 @@ impl From<&EmitOptions> for deno_ast::EmitOptions {
     }
 }
 
+/// Parse a TypeScript (or similar) module. See ParseParams for options.
 #[php_function(ignore_module, name="Deno\\AST\\parse_module")]
 fn parse_module(params: &ParseParams) -> PhpResult<ParsedSource> {
     match deno_ast::parse_module(params.try_into()?) {
