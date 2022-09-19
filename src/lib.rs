@@ -111,6 +111,8 @@ impl MainWorker {
 
 /// The options provided to the JsRuntime. Pass an instance of this class
 /// to Deno\Core\JsRuntime.
+///
+/// @example "hello-world.php" Basic Hello World.
 #[php_class(name = "Deno\\Core\\RuntimeOptions")]
 #[derive(Debug)]
 struct RuntimeOptions {
@@ -199,13 +201,12 @@ struct JsRuntime {
 impl JsRuntime {
     #[constructor]
     fn __construct(options: &RuntimeOptions) -> Self {
-
         let mut deno_jsruntime = deno_core::JsRuntime::new(options.into());
         let mut callbacks: HashMap<String, CloneableZval> = HashMap::new();
 
         for extension in &options.extensions {
-            for ( name, op ) in &extension.ops {
-                callbacks.insert( name.to_string(), op.clone().into() );
+            for (name, op) in &extension.ops {
+                callbacks.insert(name.to_string(), op.clone().into());
             }
         }
 
@@ -427,6 +428,174 @@ impl ModuleSource {
             module_url_specified,
             module_url_found,
         }
+    }
+}
+
+#[php_class(name = "Deno\\AST\\ParseParams")]
+struct ParseParams {
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    specifier: String,
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    text_info: String,
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    media_type: String,
+}
+
+#[php_impl(rename_methods = "none")]
+impl ParseParams {
+    fn __construct() -> PhpResult<Self> {
+        Ok(Self {
+            specifier: "".to_string(),
+            media_type: "javascript".to_string(),
+            text_info: "".to_string(),
+        })
+    }
+}
+
+impl TryFrom<&ParseParams> for deno_ast::ParseParams {
+    type Error = String;
+    fn try_from(params: &ParseParams) -> Result<Self, String> {
+        let media_type = match url::Url::parse(params.specifier.as_str() ) {
+            Ok(t) => t,
+            Err(err) => return Err(err.to_string()),
+        };
+
+        Ok(deno_ast::ParseParams {
+            specifier: params.specifier.clone(),
+            text_info: deno_ast::SourceTextInfo::from_string(params.text_info.clone()),
+            capture_tokens: false,
+            maybe_syntax: None,
+            scope_analysis: false,
+            media_type: deno_ast::MediaType::from_content_type(
+                &media_type,
+                params.media_type.clone(),
+            ),
+        })
+    }
+}
+
+#[php_class(name = "Deno\\AST\\TranspiledSource")]
+struct TranspiledSource {
+    /// Transpiled text.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub text: String,
+    /// Source map back to the original file.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub source_map: Option<String>,
+}
+
+#[php_class(name = "Deno\\AST\\ParsedSource")]
+struct ParsedSource {
+    deno_ast_parsed_source: deno_ast::ParsedSource,
+}
+
+#[php_impl(rename_methods = "none")]
+impl ParsedSource {
+    fn transpile(&self, options: &EmitOptions) -> PhpResult<TranspiledSource> {
+        match self.deno_ast_parsed_source.transpile( &options.into() ) {
+            Ok(transpiled_source) => Ok(TranspiledSource {
+                text: transpiled_source.text,
+                source_map: transpiled_source.source_map,
+            }),
+            Err(error) => Err(error.to_string().into()),
+        }
+    }
+}
+
+#[php_class(name = "Deno\\AST\\EmitOptions")]
+struct EmitOptions {
+    /// When emitting a legacy decorator, also emit experimental decorator meta
+    /// data.  Defaults to `false`.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub emit_metadata: bool,
+    /// Should the source map be inlined in the emitted code file, or provided
+    /// as a separate file.  Defaults to `true`.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub inline_source_map: bool,
+    /// Should the sources be inlined in the source map.  Defaults to `true`.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub inline_sources: bool,
+    /// `true` if the program should use an implicit JSX import source/the "new"
+    /// JSX transforms.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub jsx_automatic: bool,
+    /// If JSX is automatic, if it is in development mode, meaning that it should
+    /// import `jsx-dev-runtime` and transform JSX using `jsxDEV` import from the
+    /// JSX import source as well as provide additional debug information to the
+    /// JSX factory.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub jsx_development: bool,
+    /// When transforming JSX, what value should be used for the JSX factory.
+    /// Defaults to `React.createElement`.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub jsx_factory: String,
+    /// When transforming JSX, what value should be used for the JSX fragment
+    /// factory.  Defaults to `React.Fragment`.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub jsx_fragment_factory: String,
+    /// The string module specifier to implicitly import JSX factories from when
+    /// transpiling JSX.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub jsx_import_source: Option<String>,
+    /// Should a corresponding .map file be created for the output. This should be
+    /// false if inline_source_map is true. Defaults to `false`.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub source_map: bool,
+    /// Should JSX be transformed or preserved.  Defaults to `true`.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub transform_jsx: bool,
+    /// Should import declarations be transformed to variable declarations using
+    /// a dynamic import. This is useful for import & export declaration support
+    /// in script contexts such as the Deno REPL.  Defaults to `false`.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    pub var_decl_imports: bool,
+}
+
+#[php_impl(rename_methods = "none")]
+impl EmitOptions {
+    fn __construct() -> EmitOptions {
+        return EmitOptions {
+            emit_metadata: false,
+            inline_source_map: true,
+            inline_sources: true,
+            source_map: false,
+            jsx_automatic: false,
+            jsx_development: false,
+            jsx_factory: "React.createElement".into(),
+            jsx_fragment_factory: "React.Fragment".into(),
+            jsx_import_source: None,
+            transform_jsx: true,
+            var_decl_imports: false,
+        }
+    }
+}
+
+impl From<&EmitOptions> for deno_ast::EmitOptions {
+    fn from(options: &EmitOptions) -> deno_ast::EmitOptions {
+        deno_ast::EmitOptions {
+            emit_metadata: options.emit_metadata,
+            imports_not_used_as_values: deno_ast::ImportsNotUsedAsValues::Remove,
+            inline_source_map: options.inline_source_map,
+            inline_sources: options.inline_sources,
+            jsx_automatic: options.jsx_automatic,
+            jsx_development: options.jsx_development,
+            jsx_factory: options.jsx_factory.clone(),
+            jsx_fragment_factory: options.jsx_fragment_factory.clone(),
+            jsx_import_source: options.jsx_import_source.clone(),
+            source_map: options.source_map,
+            transform_jsx: options.transform_jsx,
+            var_decl_imports: options.var_decl_imports,
+        }
+    }
+}
+
+#[php_function(ignore_module, name="Deno\\AST\\parse_module")]
+fn parse_module(params: &ParseParams) -> PhpResult<ParsedSource> {
+    match deno_ast::parse_module(params.try_into()?) {
+        Ok(parsed_source) => Ok(ParsedSource {
+            deno_ast_parsed_source: parsed_source,
+        }),
+        Err(diagnostic) => Err(diagnostic.to_string().into()),
     }
 }
 

@@ -14,6 +14,7 @@ functionality such as local storage, remote requests etc.
 
 
 
+
 ## Methods
 
 

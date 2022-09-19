@@ -10,6 +10,7 @@
 
 
 
+
 ## Properties
 
 
@@ -19,21 +20,6 @@
 
 ```php
 public $module_url_found
-```
-
-
-
-
-
-
-***
-
-### module_type
-
-
-
-```php
-public $module_type
 ```
 
 
@@ -64,6 +50,21 @@ public $module_url_specified
 
 ```php
 public $code
+```
+
+
+
+
+
+
+***
+
+### module_type
+
+
+
+```php
+public $module_type
 ```
 
 

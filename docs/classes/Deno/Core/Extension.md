@@ -13,15 +13,16 @@ It's common to provide `ops` and also more user-friendly accessible functions fo
 
 
 
+
 ## Properties
 
 
-### ops
+### js_files
 
 
 
 ```php
-public $ops
+public $js_files
 ```
 
 
@@ -31,12 +32,12 @@ public $ops
 
 ***
 
-### js_files
+### ops
 
 
 
 ```php
-public $js_files
+public $ops
 ```
 
 
