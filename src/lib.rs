@@ -25,7 +25,7 @@ fn get_error_class_name(e: &deno_core::error::AnyError) -> &'static str {
 #[php_impl(rename_methods = "none")]
 impl MainWorker {
     #[constructor]
-    fn __construct() -> Self {
+    fn __construct(options: &WorkerOptions) -> Self {
         let module_loader = std::rc::Rc::new(deno_core::FsModuleLoader);
         let create_web_worker_cb = std::sync::Arc::new(|_| {
             todo!("Web workers are not supported in the example");
@@ -109,6 +109,99 @@ impl MainWorker {
     }
 }
 
+#[php_class(name = "Deno\\Runtime\\WorkerOptions")]
+struct WorkerOptions {
+    bootstrap: BootstrapOptions,
+    extensions: Vec<Extension>,
+    module_loader: Option<CloneableZval>,
+}
+
+// impl From<&WorkerOptions> for deno_runtime::worker::WorkerOptions {
+//     fn from(options: &WorkerOptions) -> Self {
+//         deno_runtime::worker::WorkerOptions {
+//             bootstrap: options.bootstrap.try_into().unwrap(),
+//             extensions: options.extensions,
+//             unsafely_ignore_certificate_errors: None,
+//             root_cert_store: None,
+//             seed: None,
+//             source_map_getter: None,
+//             format_js_error_fn: None,
+//             web_worker_preload_module_cb: web_worker_event_cb.clone(),
+//             web_worker_pre_execute_module_cb: web_worker_event_cb,
+//             create_web_worker_cb,
+//             maybe_inspector_server: None,
+//             should_break_on_first_statement: false,
+//             module_loader,
+//             npm_resolver: None,
+//             get_error_class_fn: Some(&get_error_class_name),
+//             origin_storage_dir: None,
+//             blob_store: deno_runtime::deno_web::BlobStore::default(),
+//             broadcast_channel: deno_broadcast_channel::InMemoryBroadcastChannel::default(),
+//             shared_array_buffer_store: None,
+//             compiled_wasm_module_store: None,
+//             stdio: Default::default(),
+//         }
+//     }
+// }
+
+#[php_class(name = "Deno\\Runtime\\BootstrapOptions")]
+struct BootstrapOptions {
+    /// Sets `Deno.args` in JS runtime.
+    args: Vec<String>,
+    cpu_count: usize,
+    debug_flag: bool,
+    enable_testing_features: bool,
+    location: Option<String>,
+    /// Sets `Deno.noColor` in JS runtime.
+    no_color: bool,
+    is_tty: bool,
+    /// Sets `Deno.version.deno` in JS runtime.
+    runtime_version: String,
+    /// Sets `Deno.version.typescript` in JS runtime.
+    ts_version: String,
+    unstable: bool,
+    user_agent: String,
+}
+
+impl BootstrapOptions {
+    fn __construct() -> Self {
+        BootstrapOptions {
+            args: vec![],
+            cpu_count: 1,
+            debug_flag: false,
+            enable_testing_features: false,
+            location: None,
+            no_color: false,
+            is_tty: false,
+            runtime_version: "x".to_string(),
+            ts_version: "x".to_string(),
+            unstable: false,
+            user_agent: "hello_runtime".to_string(),
+        }
+    }
+}
+impl TryFrom<&BootstrapOptions> for deno_runtime::BootstrapOptions {
+    type Error = String;
+    fn try_from(options: &BootstrapOptions) -> Result<deno_runtime::BootstrapOptions, String> {
+        Ok(deno_runtime::BootstrapOptions {
+            args: options.args.clone(),
+            cpu_count: options.cpu_count,
+            debug_flag: options.debug_flag,
+            enable_testing_features: options.enable_testing_features,
+            location: match options.location.clone() {
+                Some(location) => url::Url::parse(location.as_str()).ok(),
+                None => None,
+            },
+            no_color: options.no_color,
+            is_tty: options.is_tty,
+            runtime_version: options.runtime_version.clone(),
+            ts_version: options.ts_version.clone(),
+            unstable: options.unstable,
+            user_agent: options.user_agent.clone(),
+        })
+    }
+}
+
 /// The options provided to the JsRuntime. Pass an instance of this class
 /// to Deno\Core\JsRuntime.
 ///
@@ -118,10 +211,12 @@ impl MainWorker {
 struct RuntimeOptions {
     /// The module loader accepts a callable which is responsible for loading
     /// ES6 modules from a given name. The loader is in the form `function ( string $specifier ) : Deno\Core\ModuleSource`
+    /// @var callable
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     module_loader: Option<CloneableZval>,
     /// Extensions allow you to add additional functionality via Deno "ops" to the JsRuntime. `extensions` takes an array of
     /// Deno\Core\Extension instances. See Deno\Core\Extension for details on the PHP <=> JS functions bridge.
+    /// @var Deno\Core\Extension[]
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     extensions: Vec<Extension>,
 }
@@ -282,8 +377,12 @@ impl ModuleLoader {
 #[php_class(name = "Deno\\Core\\JsFile")]
 #[derive(Clone, Debug)]
 struct JsFile {
+    /// The filename for the JS file
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     filename: String,
+    /// The code for the javascript file
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     code: String,
 }
@@ -305,8 +404,12 @@ impl JsFile {
 #[php_class(name = "Deno\\Core\\Extension")]
 #[derive(Clone, Debug)]
 struct Extension {
+    /// The JS files that should be loaded into the V8 Isolate.
+    /// @var Deno\Core\JsFile[]
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     js_files: Vec<JsFile>,
+    /// The ops for the extension (bridged to PHP functions)
+    /// @var array<string, callable>
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     ops: HashMap<String, CloneableZval>,
 }
@@ -406,16 +509,20 @@ impl deno_core::ModuleLoader for ModuleLoader {
 #[derive(Debug)]
 struct ModuleSource {
     /// The module's source code.
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     code: String,
     /// The module type, can be "javascript" or "json".
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     module_type: String,
-    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     /// The specified module URL of the import.
-    module_url_specified: String,
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    module_url_specified: String,
     /// The resolved module URL, after things like 301 redrects etc.
+    /// @var string
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     module_url_found: String,
 }
 
@@ -442,12 +549,15 @@ impl ModuleSource {
 #[php_class(name = "Deno\\AST\\ParseParams")]
 struct ParseParams {
     /// The ES6 module specifier, must be a URL.
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     specifier: String,
     /// The source code of the ES6 module.
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     text_info: String,
     /// The type of the module, specified as a mime-type such as application/typescript etc.
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     media_type: String,
 }
@@ -466,7 +576,7 @@ impl ParseParams {
 impl TryFrom<&ParseParams> for deno_ast::ParseParams {
     type Error = String;
     fn try_from(params: &ParseParams) -> Result<Self, String> {
-        let media_type = match url::Url::parse(params.specifier.as_str() ) {
+        let media_type = match url::Url::parse(params.specifier.as_str()) {
             Ok(t) => t,
             Err(err) => return Err(err.to_string()),
         };
@@ -489,9 +599,11 @@ impl TryFrom<&ParseParams> for deno_ast::ParseParams {
 #[php_class(name = "Deno\\AST\\TranspiledSource")]
 struct TranspiledSource {
     /// Transpiled text.
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub text: String,
     /// Source map back to the original file.
+    /// @var string|null
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub source_map: Option<String>,
 }
@@ -506,7 +618,7 @@ struct ParsedSource {
 impl ParsedSource {
     /// Transpile the ASP to TypeScript, with the provided EmitOptions. Throws an exception or returns Deno\AST\TranspiledSource
     fn transpile(&self, options: &EmitOptions) -> PhpResult<TranspiledSource> {
-        match self.deno_ast_parsed_source.transpile( &options.into() ) {
+        match self.deno_ast_parsed_source.transpile(&options.into()) {
             Ok(transpiled_source) => Ok(TranspiledSource {
                 text: transpiled_source.text,
                 source_map: transpiled_source.source_map,
@@ -521,47 +633,58 @@ impl ParsedSource {
 struct EmitOptions {
     /// When emitting a legacy decorator, also emit experimental decorator meta
     /// data.  Defaults to `false`.
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub emit_metadata: bool,
     /// Should the source map be inlined in the emitted code file, or provided
     /// as a separate file.  Defaults to `true`.
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub inline_source_map: bool,
     /// Should the sources be inlined in the source map.  Defaults to `true`.
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub inline_sources: bool,
     /// `true` if the program should use an implicit JSX import source/the "new"
     /// JSX transforms.
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub jsx_automatic: bool,
     /// If JSX is automatic, if it is in development mode, meaning that it should
     /// import `jsx-dev-runtime` and transform JSX using `jsxDEV` import from the
     /// JSX import source as well as provide additional debug information to the
     /// JSX factory.
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub jsx_development: bool,
     /// When transforming JSX, what value should be used for the JSX factory.
     /// Defaults to `React.createElement`.
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub jsx_factory: String,
     /// When transforming JSX, what value should be used for the JSX fragment
     /// factory.  Defaults to `React.Fragment`.
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub jsx_fragment_factory: String,
     /// The string module specifier to implicitly import JSX factories from when
     /// transpiling JSX.
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub jsx_import_source: Option<String>,
     /// Should a corresponding .map file be created for the output. This should be
     /// false if inline_source_map is true. Defaults to `false`.
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub source_map: bool,
     /// Should JSX be transformed or preserved.  Defaults to `true`.
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub transform_jsx: bool,
     /// Should import declarations be transformed to variable declarations using
     /// a dynamic import. This is useful for import & export declaration support
     /// in script contexts such as the Deno REPL.  Defaults to `false`.
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     pub var_decl_imports: bool,
 }
@@ -581,7 +704,7 @@ impl EmitOptions {
             jsx_import_source: None,
             transform_jsx: true,
             var_decl_imports: false,
-        }
+        };
     }
 }
 
@@ -605,7 +728,7 @@ impl From<&EmitOptions> for deno_ast::EmitOptions {
 }
 
 /// Parse a TypeScript (or similar) module. See ParseParams for options.
-#[php_function(ignore_module, name="Deno\\AST\\parse_module")]
+#[php_function(ignore_module, name = "Deno\\AST\\parse_module")]
 fn parse_module(params: &ParseParams) -> PhpResult<ParsedSource> {
     match deno_ast::parse_module(params.try_into()?) {
         Ok(parsed_source) => Ok(ParsedSource {
