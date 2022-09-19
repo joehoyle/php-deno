@@ -2,7 +2,7 @@
 
 # EmitOptions
 
-
+TypeScript compiler options used when transpiling.
 
 
 
@@ -13,21 +13,6 @@
 
 ## Properties
 
-
-### transform_jsx
-
-Should JSX be transformed or preserved.  Defaults to `true`.
-
-```php
-public $transform_jsx
-```
-
-
-
-
-
-
-***
 
 ### var_decl_imports
 
@@ -46,13 +31,44 @@ public $var_decl_imports
 
 ***
 
-### source_map
+### jsx_import_source
 
-Should a corresponding .map file be created for the output. This should be
-false if inline_source_map is true. Defaults to `false`.
+The string module specifier to implicitly import JSX factories from when
+transpiling JSX.
 
 ```php
-public $source_map
+public $jsx_import_source
+```
+
+
+
+
+
+
+***
+
+### jsx_automatic
+
+`true` if the program should use an implicit JSX import source/the "new"
+JSX transforms.
+
+```php
+public $jsx_automatic
+```
+
+
+
+
+
+
+***
+
+### inline_sources
+
+Should the sources be inlined in the source map.  Defaults to `true`.
+
+```php
+public $inline_sources
 ```
 
 
@@ -94,6 +110,37 @@ public $jsx_fragment_factory
 
 ***
 
+### source_map
+
+Should a corresponding .map file be created for the output. This should be
+false if inline_source_map is true. Defaults to `false`.
+
+```php
+public $source_map
+```
+
+
+
+
+
+
+***
+
+### transform_jsx
+
+Should JSX be transformed or preserved.  Defaults to `true`.
+
+```php
+public $transform_jsx
+```
+
+
+
+
+
+
+***
+
 ### jsx_development
 
 If JSX is automatic, if it is in development mode, meaning that it should
@@ -103,53 +150,6 @@ JSX factory.
 
 ```php
 public $jsx_development
-```
-
-
-
-
-
-
-***
-
-### inline_sources
-
-Should the sources be inlined in the source map.  Defaults to `true`.
-
-```php
-public $inline_sources
-```
-
-
-
-
-
-
-***
-
-### emit_metadata
-
-When emitting a legacy decorator, also emit experimental decorator meta
-data.  Defaults to `false`.
-
-```php
-public $emit_metadata
-```
-
-
-
-
-
-
-***
-
-### jsx_import_source
-
-The string module specifier to implicitly import JSX factories from when
-transpiling JSX.
-
-```php
-public $jsx_import_source
 ```
 
 
@@ -174,13 +174,13 @@ Defaults to `React.createElement`.
 
 ***
 
-### jsx_automatic
+### emit_metadata
 
-`true` if the program should use an implicit JSX import source/the "new"
-JSX transforms.
+When emitting a legacy decorator, also emit experimental decorator meta
+data.  Defaults to `false`.
 
 ```php
-public $jsx_automatic
+public $emit_metadata
 ```
 
 

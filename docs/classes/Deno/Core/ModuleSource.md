@@ -2,7 +2,8 @@
 
 # ModuleSource
 
-
+ModuleSource represents an ES6 module, including the source code and type. An ModuleSource should
+be returned from your module loader passed to JsRuntime's RuntimeOptions::module_loader property.
 
 
 
@@ -14,27 +15,12 @@
 ## Properties
 
 
-### module_url_found
+### code
 
-
-
-```php
-public $module_url_found
-```
-
-
-
-
-
-
-***
-
-### module_type
-
-
+The module's source code.
 
 ```php
-public $module_type
+public $code
 ```
 
 
@@ -59,12 +45,27 @@ public $module_url_specified
 
 ***
 
-### code
+### module_url_found
 
 
 
 ```php
-public $code
+public $module_url_found
+```
+
+
+
+
+
+
+***
+
+### module_type
+
+The module type, can be "javascript" or "json".
+
+```php
+public $module_type
 ```
 
 

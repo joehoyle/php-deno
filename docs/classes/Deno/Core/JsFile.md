@@ -16,12 +16,12 @@ executed when the JsRuntime is initiated.
 ## Properties
 
 
-### filename
+### code
 
 
 
 ```php
-public $filename
+public $code
 ```
 
 
@@ -31,12 +31,12 @@ public $filename
 
 ***
 
-### code
+### filename
 
 
 
 ```php
-public $code
+public $filename
 ```
 
 

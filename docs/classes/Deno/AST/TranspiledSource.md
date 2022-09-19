@@ -2,7 +2,7 @@
 
 # TranspiledSource
 
-
+The transpiled code to TypeScript source code, this is the result of `Deno\AST\ParsedSource::transpile().
 
 
 
@@ -14,12 +14,12 @@
 ## Properties
 
 
-### source_map
+### text
 
-Source map back to the original file.
+Transpiled text.
 
 ```php
-public $source_map
+public $text
 ```
 
 
@@ -29,12 +29,12 @@ public $source_map
 
 ***
 
-### text
+### source_map
 
-Transpiled text.
+Source map back to the original file.
 
 ```php
-public $text
+public $source_map
 ```
 
 

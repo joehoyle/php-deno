@@ -18,13 +18,13 @@ to Deno\Core\JsRuntime.
 ## Properties
 
 
-### extensions
+### module_loader
 
-Extensions allow you to add additional functionality via Deno "ops" to the JsRuntime. `extensions` takes an array of
-Deno\Core\Extension instances. See Deno\Core\Extension for details on the PHP <=> JS functions bridge.
+The module loader accepts a callable which is responsible for loading
+ES6 modules from a given name. The loader is in the form `function ( string $specifier ) : Deno\Core\ModuleSource`
 
 ```php
-public $extensions
+public $module_loader
 ```
 
 
@@ -34,13 +34,13 @@ public $extensions
 
 ***
 
-### module_loader
+### extensions
 
-The module loader accepts a callable which is responsible for loading
-ES6 modules from a given name. The loader is in the form `function ( string $specifier ) : Deno\Core\ModuleSource`
+Extensions allow you to add additional functionality via Deno "ops" to the JsRuntime. `extensions` takes an array of
+Deno\Core\Extension instances. See Deno\Core\Extension for details on the PHP <=> JS functions bridge.
 
 ```php
-public $module_loader
+public $extensions
 ```
 
 
