@@ -29,6 +29,21 @@ public $module_url_found
 
 ***
 
+### module_type
+
+
+
+```php
+public $module_type
+```
+
+
+
+
+
+
+***
+
 ### module_url_specified
 
 
@@ -50,21 +65,6 @@ public $module_url_specified
 
 ```php
 public $code
-```
-
-
-
-
-
-
-***
-
-### module_type
-
-
-
-```php
-public $module_type
 ```
 
 
@@ -108,4 +108,4 @@ public __construct(string $code, string $module_type, string $module_url_specifi
 
 
 ***
-> Automatically generated on 2022-09-13
+> Automatically generated on 2022-09-19

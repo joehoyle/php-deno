@@ -17,12 +17,12 @@ It's common to provide `ops` and also more user-friendly accessible functions fo
 ## Properties
 
 
-### js_files
+### ops
 
 
 
 ```php
-public $js_files
+public $ops
 ```
 
 
@@ -32,12 +32,12 @@ public $js_files
 
 ***
 
-### ops
+### js_files
 
 
 
 ```php
-public $ops
+public $js_files
 ```
 
 
@@ -72,4 +72,4 @@ public __construct(): mixed
 
 
 ***
-> Automatically generated on 2022-09-13
+> Automatically generated on 2022-09-19

@@ -11,6 +11,20 @@ This is an automatically generated documentation for **Documentation**.
 ## Namespaces
 
 
+### \Deno\AST
+
+#### Classes
+
+| Class | Description |
+|-------|-------------|
+| [`EmitOptions`](./classes/Deno/AST/EmitOptions.md) | |
+| [`ParseParams`](./classes/Deno/AST/ParseParams.md) | |
+| [`ParsedSource`](./classes/Deno/AST/ParsedSource.md) | |
+| [`TranspiledSource`](./classes/Deno/AST/TranspiledSource.md) | |
+
+
+
+
 ### \Deno\Core
 
 #### Classes
@@ -38,4 +52,4 @@ This is an automatically generated documentation for **Documentation**.
 
 
 ***
-> Automatically generated on 2022-09-13
+> Automatically generated on 2022-09-19
