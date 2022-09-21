@@ -178,6 +178,18 @@ struct RuntimeOptions {
     /// @var Deno\Core\Extension[]
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     extensions: Vec<Extension>,
+    /// Prepare runtime to take snapshot of loaded code. The snapshot is determinstic and uses predictable random numbers.
+    ///
+    /// Currently can’t be used with startup_snapshot.
+    /// @var bool
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    will_snapshot: bool,
+    /// V8 snapshot that should be loaded on startup.
+    ///
+    /// Currently can’t be used with will_snapshot.
+    /// @var string
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    startup_snapshot: Option<CloneableZval>,
 }
 
 #[php_impl(rename_methods = "none")]
@@ -187,6 +199,8 @@ impl RuntimeOptions {
         Self {
             module_loader: None,
             extensions: vec![],
+            will_snapshot: false,
+            startup_snapshot: None,
         }
     }
 }
@@ -199,8 +213,10 @@ impl From<&RuntimeOptions> for deno_core::RuntimeOptions {
             .map(|extension|extension.into())
             .collect();
 
-        let module_loader: Option<CloneableZval> =
-            Some(options.module_loader.as_ref().unwrap().clone());
+        let module_loader: Option<CloneableZval> = match options.module_loader.as_ref() {
+            Some(module_loader) => Some(module_loader.clone()),
+            None => None,
+        };
 
         deno_core::RuntimeOptions {
             module_loader: match module_loader {
@@ -208,6 +224,14 @@ impl From<&RuntimeOptions> for deno_core::RuntimeOptions {
                 None => None,
             },
             extensions,
+            will_snapshot: options.will_snapshot,
+            startup_snapshot: match &options.startup_snapshot {
+                Some(snapshot) => {
+                    let snapshot = snapshot.clone().into_zval(false).unwrap().binary().unwrap();
+                    Some(deno_core::Snapshot::Boxed(snapshot.as_slice().to_vec().into_boxed_slice()))
+                },
+                None => None,
+            },
             ..Default::default()
         }
     }
@@ -220,6 +244,8 @@ impl From<&RuntimeOptions> for deno_core::RuntimeOptions {
 /// functionality such as local storage, remote requests etc.
 struct JsRuntime {
     deno_jsruntime: deno_core::JsRuntime,
+    will_snapshot: bool,
+    has_snapshotted: bool,
 }
 
 #[php_impl(rename_methods = "none")]
@@ -241,10 +267,19 @@ impl JsRuntime {
 
         Self {
             deno_jsruntime: deno_jsruntime,
+            will_snapshot: options.will_snapshot,
+            has_snapshotted: false,
         }
     }
 
+    /// Execute JavaSscript inside the V8 Isolate.
+    ///
+    /// This does not support top level await for Es6 imports. use `load_main_module`
+    /// to execute JavaScript in modules.
     fn execute_script(&mut self, name: &str, source_code: &str) -> PhpResult<()> {
+        if self.has_snapshotted {
+            return Err("Scripts can not be executed after JsRuntime has been snapshotted.".into());
+        }
         match self.deno_jsruntime.execute_script(name, source_code) {
             Ok(_) => Ok(()),
             Err(error) => match error.downcast::<deno_core::error::JsError>() {
@@ -254,6 +289,11 @@ impl JsRuntime {
         }
     }
 
+    /// Load an ES6 module as the main starting module.
+    ///
+    /// This function returns a module ID which should be passed to `mod_evaluate()`.
+    ///
+    /// @return int
     fn load_main_module(
         &mut self,
         specifier: &str,
@@ -269,6 +309,9 @@ impl JsRuntime {
         }
     }
 
+    /// Evaluate a given module ID. This will run all schyonous code in the module.
+    /// If there are pending Promises or async axtions, use `run_event_loop()` to
+    /// wait until all async actions complete.
     fn mod_evaluate(&mut self, id: deno_core::ModuleId) -> PhpResult<()> {
         let result = self.deno_jsruntime.mod_evaluate(id);
         match futures::executor::block_on(self.deno_jsruntime.run_event_loop(false)) {
@@ -282,11 +325,27 @@ impl JsRuntime {
         }
     }
 
+    /// Wait for the event loop to run all pending async actions.
     fn run_event_loop(&mut self) -> PhpResult<()> {
         match futures::executor::block_on(self.deno_jsruntime.run_event_loop(false)) {
             Ok(()) => Ok(()),
             Err(error) => Err(error.to_string().into()),
         }
+    }
+
+    /// Takes a snapshot. The isolate should have been created with will_snapshot set to true.
+    ///
+    /// @return string
+    fn snapshot(&mut self) -> PhpResult<Zval> {
+        if self.will_snapshot == false {
+            return Err("Unable to shapshot JsRuntime when RuntimeOptions.will_snapshot is not true.".into());
+        }
+        let startup_data = self.deno_jsruntime.snapshot();
+        let snapshot_slice: &[u8] = &*startup_data;
+        let mut zval = Zval::new();
+        zval.set_binary(snapshot_slice.to_vec());
+        self.has_snapshotted = true;
+        Ok(zval)
     }
 }
 /// The module loader interface (don't trust the docs, this is an interface not a class!)
