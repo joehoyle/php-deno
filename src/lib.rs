@@ -165,13 +165,12 @@ impl TryFrom<&BootstrapOptions> for deno_runtime::BootstrapOptions {
 /// The options provided to the JsRuntime. Pass an instance of this class
 /// to Deno\Core\JsRuntime.
 ///
-/// @example "hello-world.php" Basic Hello World.
 #[php_class(name = "Deno\\Core\\RuntimeOptions")]
 #[derive(Debug)]
 struct RuntimeOptions {
     /// The module loader accepts a callable which is responsible for loading
-    /// ES6 modules from a given name. The loader is in the form `function ( string $specifier ) : Deno\Core\ModuleSource`
-    /// @var callable
+    /// ES6 modules from a given name. See `Deno\Core\ModuleLoader` for methods that should be implemented.
+    /// @var Deno\Core\ModuleLoader
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     module_loader: Option<CloneableZval>,
     /// Extensions allow you to add additional functionality via Deno "ops" to the JsRuntime. `extensions` takes an array of
@@ -290,18 +289,26 @@ impl JsRuntime {
         }
     }
 }
+/// The module loader interface (don't trust the docs, this is an interface not a class!)
+/// Pass an instance of your class that implements `Deno\Core\ModuleLoader` to the `module_loader`
+/// property of `Deno\Runtime\WorkerOptions` or `Deno\Core\RuntimeOptions`
 #[php_class(name = "Deno\\Core\\ModuleLoader", flags = "Interface")]
 #[derive(Clone, Debug)]
 struct ModuleLoaderInterface {}
 
 #[php_impl(rename_methods = "none")]
 impl ModuleLoaderInterface {
+    /// The `resolve` method should take a module specifier and normalize it to a canonical URL.
+    /// @return string
     #[php_method]
     #[abstract_method]
     fn resolve(&self, _specifier: &str, _referrer: &str) -> &str {
         ""
     }
 
+    /// The `load` method takes a module specifier and should return the contents for a module.
+    /// See `Deno\Core\ModuleSource` for the specifics.
+    /// @return \Deno\Core\ModuleSource
     #[php_method]
     #[abstract_method]
     fn load(&self, _specifier: &str) -> Option<ModuleSource> {
