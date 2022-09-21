@@ -1,0 +1,3 @@
+[submodule "deps/ext-php-rs"]
+	path = deps/ext-php-rs
+	url = git@github.com:joehoyle/ext-php-rs.git
