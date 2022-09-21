@@ -8,6 +8,49 @@ namespace Deno\AST {
      */
     function parse_module(\Deno\AST\ParseParams $params): \Deno\AST\ParsedSource {}
 
+    /**
+     * ParseParams represent the arguments for Deno\AST\parse_module, which is used to
+     * parse TypeScript.
+     */
+    class ParseParams {
+        /**
+         * The ES6 module specifier, must be a URL.
+         * @var string
+         */
+        public $specifier;
+
+        /**
+         * The type of the module, specified as a mime-type such as application/typescript etc.
+         * @var string
+         */
+        public $media_type;
+
+        /**
+         * The source code of the ES6 module.
+         * @var string
+         */
+        public $text_info;
+
+        public function __construct() {}
+    }
+
+    /**
+     * The transpiled code to TypeScript source code, this is the result of `Deno\AST\ParsedSource::transpile().
+     */
+    class TranspiledSource {
+        /**
+         * Source map back to the original file.
+         * @var string|null
+         */
+        public $source_map;
+
+        /**
+         * Transpiled text.
+         * @var string
+         */
+        public $text;
+    }
+
     class ParsedSource {
         /**
          * Transpile the ASP to TypeScript, with the provided EmitOptions. Throws an exception or returns Deno\AST\TranspiledSource
@@ -19,56 +62,6 @@ namespace Deno\AST {
      * TypeScript compiler options used when transpiling.
      */
     class EmitOptions {
-        /**
-         * Should the sources be inlined in the source map.  Defaults to `true`.
-         * @var bool
-         */
-        public $inline_sources;
-
-        /**
-         * When emitting a legacy decorator, also emit experimental decorator meta
-         * data.  Defaults to `false`.
-         * @var bool
-         */
-        public $emit_metadata;
-
-        /**
-         * If JSX is automatic, if it is in development mode, meaning that it should
-         * import `jsx-dev-runtime` and transform JSX using `jsxDEV` import from the
-         * JSX import source as well as provide additional debug information to the
-         * JSX factory.
-         * @var bool
-         */
-        public $jsx_development;
-
-        /**
-         * Should JSX be transformed or preserved.  Defaults to `true`.
-         * @var bool
-         */
-        public $transform_jsx;
-
-        /**
-         * Should import declarations be transformed to variable declarations using
-         * a dynamic import. This is useful for import & export declaration support
-         * in script contexts such as the Deno REPL.  Defaults to `false`.
-         * @var bool
-         */
-        public $var_decl_imports;
-
-        /**
-         * `true` if the program should use an implicit JSX import source/the "new"
-         * JSX transforms.
-         * @var bool
-         */
-        public $jsx_automatic;
-
-        /**
-         * When transforming JSX, what value should be used for the JSX factory.
-         * Defaults to `React.createElement`.
-         * @var string
-         */
-        public $jsx_factory;
-
         /**
          * The string module specifier to implicitly import JSX factories from when
          * transpiling JSX.
@@ -84,11 +77,47 @@ namespace Deno\AST {
         public $source_map;
 
         /**
-         * When transforming JSX, what value should be used for the JSX fragment
-         * factory.  Defaults to `React.Fragment`.
+         * Should import declarations be transformed to variable declarations using
+         * a dynamic import. This is useful for import & export declaration support
+         * in script contexts such as the Deno REPL.  Defaults to `false`.
+         * @var bool
+         */
+        public $var_decl_imports;
+
+        /**
+         * When transforming JSX, what value should be used for the JSX factory.
+         * Defaults to `React.createElement`.
          * @var string
          */
-        public $jsx_fragment_factory;
+        public $jsx_factory;
+
+        /**
+         * Should JSX be transformed or preserved.  Defaults to `true`.
+         * @var bool
+         */
+        public $transform_jsx;
+
+        /**
+         * If JSX is automatic, if it is in development mode, meaning that it should
+         * import `jsx-dev-runtime` and transform JSX using `jsxDEV` import from the
+         * JSX import source as well as provide additional debug information to the
+         * JSX factory.
+         * @var bool
+         */
+        public $jsx_development;
+
+        /**
+         * Should the sources be inlined in the source map.  Defaults to `true`.
+         * @var bool
+         */
+        public $inline_sources;
+
+        /**
+         * When emitting a legacy decorator, also emit experimental decorator meta
+         * data.  Defaults to `false`.
+         * @var bool
+         */
+        public $emit_metadata;
 
         /**
          * Should the source map be inlined in the emitted code file, or provided
@@ -97,48 +126,19 @@ namespace Deno\AST {
          */
         public $inline_source_map;
 
-        public function __construct() {}
-    }
-
-    /**
-     * The transpiled code to TypeScript source code, this is the result of `Deno\AST\ParsedSource::transpile().
-     */
-    class TranspiledSource {
         /**
-         * Transpiled text.
+         * When transforming JSX, what value should be used for the JSX fragment
+         * factory.  Defaults to `React.Fragment`.
          * @var string
          */
-        public $text;
+        public $jsx_fragment_factory;
 
         /**
-         * Source map back to the original file.
-         * @var string|null
+         * `true` if the program should use an implicit JSX import source/the "new"
+         * JSX transforms.
+         * @var bool
          */
-        public $source_map;
-    }
-
-    /**
-     * ParseParams represent the arguments for Deno\AST\parse_module, which is used to
-     * parse TypeScript.
-     */
-    class ParseParams {
-        /**
-         * The ES6 module specifier, must be a URL.
-         * @var string
-         */
-        public $specifier;
-
-        /**
-         * The source code of the ES6 module.
-         * @var string
-         */
-        public $text_info;
-
-        /**
-         * The type of the module, specified as a mime-type such as application/typescript etc.
-         * @var string
-         */
-        public $media_type;
+        public $jsx_automatic;
 
         public function __construct() {}
     }
@@ -146,10 +146,52 @@ namespace Deno\AST {
 
 namespace Deno\Core {
     /**
+     * Extension contains PHP functions (ops) and associated js files which are
+     * exposed to JavaScript via the JsRuntime. PHP functions can be called from JavaScript
+     * via `Deno.core.$name` where `$name` is the array key string from the `ops` property.
+     *
+     * It's common to provide `ops` and also more user-friendly accessible functions for those
+     * `ops` via the `js_files` property.
+     */
+    class Extension {
+        /**
+         * The ops for the extension (bridged to PHP functions)
+         * @var array<string, callable>
+         */
+        public $ops;
+
+        /**
+         * The JS files that should be loaded into the V8 Isolate.
+         * @var Deno\Core\JsFile[]
+         */
+        public $js_files;
+
+        public function __construct() {}
+    }
+
+    interface ModuleLoader {
+        public function resolve(string $_specifier, string $_referrer): string;
+
+        public function load(string $_specifier): ?\Deno\Core\ModuleSource;
+    }
+
+    /**
      * ModuleSource represents an ES6 module, including the source code and type. An ModuleSource should
      * be returned from your module loader passed to JsRuntime's RuntimeOptions::module_loader property.
      */
     class ModuleSource {
+        /**
+         * The module's source code.
+         * @var string
+         */
+        public $code;
+
+        /**
+         * The resolved module URL, after things like 301 redrects etc.
+         * @var string
+         */
+        public $module_url_found;
+
         /**
          * The module type, can be "javascript" or "json".
          * @var string
@@ -162,19 +204,25 @@ namespace Deno\Core {
          */
         public $module_url_specified;
 
-        /**
-         * The resolved module URL, after things like 301 redrects etc.
-         * @var string
-         */
-        public $module_url_found;
-
-        /**
-         * The module's source code.
-         * @var string
-         */
-        public $code;
-
         public function __construct(string $code, string $module_type, string $module_url_specified, string $module_url_found) {}
+    }
+
+    /**
+     * The JsRuntime is a wrapper around a V8 isolate. It can execute ES6 including ES6 modules. The JsRuntime
+     * does not include any of the Deno.core.* ops, and does not provide implementations for web apis, such as
+     * fetch(). Use JsRuntime if you want to provide low-level v8 isolates, and implement extensions for all
+     * functionality such as local storage, remote requests etc.
+     */
+    class JsRuntime {
+        public function __construct(\Deno\Core\RuntimeOptions $options) {}
+
+        public function execute_script(string $name, string $source_code): mixed {}
+
+        public function load_main_module(string $specifier, ?string $code): int {}
+
+        public function mod_evaluate(int $id): mixed {}
+
+        public function run_event_loop(): mixed {}
     }
 
     /**
@@ -202,48 +250,6 @@ namespace Deno\Core {
     }
 
     /**
-     * The JsRuntime is a wrapper around a V8 isolate. It can execute ES6 including ES6 modules. The JsRuntime
-     * does not include any of the Deno.core.* ops, and does not provide implementations for web apis, such as
-     * fetch(). Use JsRuntime if you want to provide low-level v8 isolates, and implement extensions for all
-     * functionality such as local storage, remote requests etc.
-     */
-    class JsRuntime {
-        public function __construct(\Deno\Core\RuntimeOptions $options) {}
-
-        public function execute_script(string $name, string $source_code): mixed {}
-
-        public function load_main_module(string $specifier, ?string $code): int {}
-
-        public function mod_evaluate(int $id): mixed {}
-
-        public function run_event_loop(): mixed {}
-    }
-
-    /**
-     * Extension contains PHP functions (ops) and associated js files which are
-     * exposed to JavaScript via the JsRuntime. PHP functions can be called from JavaScript
-     * via `Deno.core.$name` where `$name` is the array key string from the `ops` property.
-     *
-     * It's common to provide `ops` and also more user-friendly accessible functions for those
-     * `ops` via the `js_files` property.
-     */
-    class Extension {
-        /**
-         * The JS files that should be loaded into the V8 Isolate.
-         * @var Deno\Core\JsFile[]
-         */
-        public $js_files;
-
-        /**
-         * The ops for the extension (bridged to PHP functions)
-         * @var array<string, callable>
-         */
-        public $ops;
-
-        public function __construct() {}
-    }
-
-    /**
      * JsFile is a descriptor for JavaScript files that are loaded as
      * part of the Extension->js_files array. The `code` of `JsFile` is
      * executed when the JsRuntime is initiated.
@@ -266,7 +272,7 @@ namespace Deno\Core {
 }
 
 namespace Deno\Runtime {
-    class BootstrapOptions {
+    class WorkerOptions {
     }
 
     /**
@@ -283,6 +289,6 @@ namespace Deno\Runtime {
         public function run_event_loop(): mixed {}
     }
 
-    class WorkerOptions {
+    class BootstrapOptions {
     }
 }

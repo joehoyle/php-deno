@@ -1,5 +1,6 @@
 use anyhow::Error;
 use ext_php_rs::{
+    class::RegisteredClass,
     convert::FromZval,
     convert::{IntoZval, IntoZvalDyn},
     prelude::*,
@@ -273,10 +274,14 @@ impl From<&RuntimeOptions> for deno_core::RuntimeOptions {
             })
             .collect();
 
+        let module_loader: Option<CloneableZval> =
+            Some(options.module_loader.as_ref().unwrap().clone());
+
         deno_core::RuntimeOptions {
-            module_loader: Some(std::rc::Rc::new(ModuleLoader::new(Some(
-                options.module_loader.as_ref().unwrap().clone(),
-            )))),
+            module_loader: match module_loader {
+                Some(module_loader) => Some(std::rc::Rc::new(ModuleLoader::new(module_loader))),
+                None => None,
+            },
             extensions,
             ..Default::default()
         }
@@ -329,10 +334,11 @@ impl JsRuntime {
         specifier: &str,
         code: Option<String>,
     ) -> PhpResult<deno_core::ModuleId> {
-        match futures::executor::block_on(
-            self.deno_jsruntime
-                .load_main_module(&url::Url::parse(specifier).unwrap(), code),
-        ) {
+        let specifier = match url::Url::parse(specifier) {
+            Ok(specifier) => specifier,
+            Err(err) => return Err(err.to_string().into()),
+        };
+        match futures::executor::block_on(self.deno_jsruntime.load_main_module(&specifier, code)) {
             Ok(module) => Ok(module),
             Err(error) => Err(error.to_string().into()),
         }
@@ -358,16 +364,115 @@ impl JsRuntime {
         }
     }
 }
+#[php_class(name = "Deno\\Core\\ModuleLoader", flags = "Interface")]
+#[derive(Clone, Debug)]
+struct ModuleLoaderInterface {}
 
-struct ModuleLoader {
-    load_callback: Option<CloneableZval>,
+#[php_impl(rename_methods = "none")]
+impl ModuleLoaderInterface {
+    #[php_method]
+    #[abstract_method]
+    fn resolve(&self, _specifier: &str, _referrer: &str) -> &str {
+        ""
+    }
+
+    #[php_method]
+    #[abstract_method]
+    fn load(&self, _specifier: &str) -> Option<ModuleSource> {
+        None
+    }
 }
 
+#[derive(Clone)]
+struct ModuleLoader(CloneableZval);
+
 impl ModuleLoader {
-    fn new(load_callback: Option<CloneableZval>) -> Self {
-        Self {
-            load_callback: load_callback,
+    fn new(loader: CloneableZval) -> Self {
+        Self(loader)
+    }
+}
+
+impl deno_core::ModuleLoader for ModuleLoader {
+    fn resolve(
+        &self,
+        specifier: &str,
+        referrer: &str,
+        _is_main: bool,
+    ) -> Result<deno_core::ModuleSpecifier, Error> {
+        let mut hashtable = ext_php_rs::types::ZendHashTable::new();
+        hashtable.insert_at_index(0, (&self.0).clone().into_zval(false).unwrap());
+        hashtable.insert_at_index(1, "resolve");
+
+        let result = ext_php_rs::call_user_func!(
+            hashtable.into_zval(false).unwrap(),
+            specifier,
+            referrer,
+            _is_main
+        );
+
+        match result {
+            Ok(result) => match result.string() {
+                Some(result) => match url::Url::parse(result.as_str()) {
+                    Ok(result) => Ok(result),
+                    Err(err) => anyhow::bail!(err.to_string()),
+                },
+                None => anyhow::bail!("resolve() did not return a valid string."),
+            },
+            Err(_) => {
+                anyhow::bail!("resolve() did not return a valid string.")
+            }
         }
+    }
+
+    fn load(
+        &self,
+        _module_specifier: &deno_core::ModuleSpecifier,
+        _maybe_referrer: Option<deno_core::ModuleSpecifier>,
+        _is_dyn_import: bool,
+    ) -> core::pin::Pin<Box<deno_core::ModuleSourceFuture>> {
+        let mut hashtable = ext_php_rs::types::ZendHashTable::new();
+        hashtable.insert_at_index(0, (&self.0).clone().into_zval(false).unwrap());
+        hashtable.insert_at_index(1, "load");
+
+        let result = match ext_php_rs::call_user_func!(
+            hashtable.into_zval(false).unwrap(),
+            _module_specifier.to_string()
+        ) {
+            Ok(result) => result,
+            Err(err) => {
+                return async {
+                    Err(deno_core::error::generic_error(
+                        "Error calling load() function on ModuleLoader",
+                    ))
+                }
+                .boxed_local()
+            }
+        };
+
+        let source: &ModuleSource = match result.extract() {
+            Some(source) => source,
+            None => {
+                return async {
+                    Err(deno_core::error::generic_error(
+                        "Error converting return value of load() to ModuleSource",
+                    ))
+                }
+                .boxed_local()
+            }
+        };
+
+        let module_source = deno_core::ModuleSource {
+            code: source.code.clone().as_bytes().to_owned().into_boxed_slice(),
+            module_type: if source.module_type == "json" {
+                deno_core::ModuleType::Json
+            } else {
+                deno_core::ModuleType::JavaScript
+            },
+            module_url_specified: source.module_url_specified.clone(),
+            module_url_found: source.module_url_found.clone(),
+        };
+
+        return async { Ok(module_source) }.boxed_local();
     }
 }
 
@@ -440,66 +545,6 @@ impl FromZval<'_> for JsFile {
         let file: &JsFile = zval.extract().unwrap();
         let new_file = file.to_owned();
         Some(new_file)
-    }
-}
-
-impl deno_core::ModuleLoader for ModuleLoader {
-    fn resolve(
-        &self,
-        specifier: &str,
-        referrer: &str,
-        _is_main: bool,
-    ) -> Result<deno_core::ModuleSpecifier, Error> {
-        Ok(deno_core::resolve_import(specifier, referrer)?)
-    }
-
-    fn load(
-        &self,
-        _module_specifier: &deno_core::ModuleSpecifier,
-        _maybe_referrer: Option<deno_core::ModuleSpecifier>,
-        _is_dyn_import: bool,
-    ) -> core::pin::Pin<Box<deno_core::ModuleSourceFuture>> {
-        let c = self.load_callback.as_ref().unwrap();
-
-        let load_callback = c.as_zval(false).unwrap();
-        if load_callback.is_callable() == false {
-            return async { Err(deno_core::error::generic_error("callback not callable")) }
-                .boxed_local();
-        }
-
-        let specifier =
-            CloneableZval::from_zval(&Zval::try_from(_module_specifier.to_string()).unwrap())
-                .unwrap();
-
-        let mut php_args: Vec<&dyn ext_php_rs::convert::IntoZvalDyn> = Vec::new();
-        php_args.push(&specifier);
-
-        let return_value = match load_callback.try_call(php_args) {
-            Ok(v) => v,
-            Err(_error) => {
-                return async {
-                    Err(deno_core::error::generic_error(
-                        "Error in callback return value",
-                    ))
-                }
-                .boxed_local()
-            }
-        };
-
-        let source: &ModuleSource = return_value.extract().unwrap();
-
-        let module_source = deno_core::ModuleSource {
-            code: source.code.clone().as_bytes().to_owned().into_boxed_slice(),
-            module_type: if source.module_type == "json" {
-                deno_core::ModuleType::Json
-            } else {
-                deno_core::ModuleType::JavaScript
-            },
-            module_url_specified: source.module_url_specified.clone(),
-            module_url_found: source.module_url_found.clone(),
-        };
-
-        return async { Ok(module_source) }.boxed_local();
     }
 }
 
