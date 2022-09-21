@@ -1,11 +1,5 @@
 use anyhow::Error;
-use ext_php_rs::{
-    class::RegisteredClass,
-    convert::FromZval,
-    convert::{IntoZval, IntoZvalDyn},
-    prelude::*,
-    types::Zval,
-};
+use ext_php_rs::{convert::FromZval, convert::IntoZval, prelude::*, types::Zval};
 use futures::future::FutureExt;
 use std::collections::HashMap;
 
@@ -26,59 +20,14 @@ fn get_error_class_name(e: &deno_core::error::AnyError) -> &'static str {
 #[php_impl(rename_methods = "none")]
 impl MainWorker {
     #[constructor]
-    fn __construct(options: &WorkerOptions) -> Self {
-        let module_loader = std::rc::Rc::new(deno_core::FsModuleLoader);
-        let create_web_worker_cb = std::sync::Arc::new(|_| {
-            todo!("Web workers are not supported in the example");
-        });
-        let web_worker_event_cb = std::sync::Arc::new(|_| {
-            todo!("Web workers are not supported in the example");
-        });
-
-        let options = deno_runtime::worker::WorkerOptions {
-            bootstrap: deno_runtime::BootstrapOptions {
-                args: vec![],
-                cpu_count: 1,
-                debug_flag: false,
-                enable_testing_features: false,
-                location: None,
-                no_color: false,
-                is_tty: false,
-                runtime_version: "x".to_string(),
-                ts_version: "x".to_string(),
-                unstable: false,
-                user_agent: "hello_runtime".to_string(),
-            },
-            extensions: vec![],
-            unsafely_ignore_certificate_errors: None,
-            root_cert_store: None,
-            seed: None,
-            source_map_getter: None,
-            format_js_error_fn: None,
-            web_worker_preload_module_cb: web_worker_event_cb.clone(),
-            web_worker_pre_execute_module_cb: web_worker_event_cb,
-            create_web_worker_cb,
-            maybe_inspector_server: None,
-            should_break_on_first_statement: false,
-            module_loader,
-            npm_resolver: None,
-            get_error_class_fn: Some(&get_error_class_name),
-            origin_storage_dir: None,
-            blob_store: deno_runtime::deno_web::BlobStore::default(),
-            broadcast_channel: deno_broadcast_channel::InMemoryBroadcastChannel::default(),
-            shared_array_buffer_store: None,
-            compiled_wasm_module_store: None,
-            stdio: Default::default(),
-        };
-        // todo take args
-        let js_path = "/Users/joe/rust/php-deno/mainModule.js";
-        let main_module = deno_core::resolve_path(js_path).unwrap();
+    fn __construct(main_module: &str, options: &WorkerOptions) -> Self {
+        let main_module = deno_core::resolve_path(main_module).unwrap();
         let permissions = deno_runtime::permissions::Permissions::allow_all();
 
         let worker = deno_runtime::worker::MainWorker::bootstrap_from_options(
             main_module.clone(),
             permissions,
-            options,
+            options.into(),
         );
         Self {
             deno_main_worker: worker,
@@ -114,38 +63,48 @@ impl MainWorker {
 struct WorkerOptions {
     bootstrap: BootstrapOptions,
     extensions: Vec<Extension>,
-    module_loader: Option<CloneableZval>,
+    module_loader: CloneableZval,
 }
 
-// impl From<&WorkerOptions> for deno_runtime::worker::WorkerOptions {
-//     fn from(options: &WorkerOptions) -> Self {
-//         deno_runtime::worker::WorkerOptions {
-//             bootstrap: options.bootstrap.try_into().unwrap(),
-//             extensions: options.extensions,
-//             unsafely_ignore_certificate_errors: None,
-//             root_cert_store: None,
-//             seed: None,
-//             source_map_getter: None,
-//             format_js_error_fn: None,
-//             web_worker_preload_module_cb: web_worker_event_cb.clone(),
-//             web_worker_pre_execute_module_cb: web_worker_event_cb,
-//             create_web_worker_cb,
-//             maybe_inspector_server: None,
-//             should_break_on_first_statement: false,
-//             module_loader,
-//             npm_resolver: None,
-//             get_error_class_fn: Some(&get_error_class_name),
-//             origin_storage_dir: None,
-//             blob_store: deno_runtime::deno_web::BlobStore::default(),
-//             broadcast_channel: deno_broadcast_channel::InMemoryBroadcastChannel::default(),
-//             shared_array_buffer_store: None,
-//             compiled_wasm_module_store: None,
-//             stdio: Default::default(),
-//         }
-//     }
-// }
+impl From<&WorkerOptions> for deno_runtime::worker::WorkerOptions {
+    fn from(options: &WorkerOptions) -> Self {
+        let create_web_worker_cb = std::sync::Arc::new(|_| {
+            todo!("Web workers are not supported in the example");
+        });
+        let web_worker_event_cb = std::sync::Arc::new(|_| {
+            todo!("Web workers are not supported in the example");
+        });
+
+        let module_loader: CloneableZval = options.module_loader.clone();
+
+        deno_runtime::worker::WorkerOptions {
+            bootstrap: (&options.bootstrap).try_into().unwrap(),
+            extensions: options.extensions.iter().map(|e|e.into()).collect(),
+            unsafely_ignore_certificate_errors: None,
+            root_cert_store: None,
+            seed: None,
+            source_map_getter: None,
+            format_js_error_fn: None,
+            web_worker_preload_module_cb: web_worker_event_cb.clone(),
+            web_worker_pre_execute_module_cb: web_worker_event_cb,
+            create_web_worker_cb,
+            maybe_inspector_server: None,
+            should_break_on_first_statement: false,
+            module_loader: std::rc::Rc::new(ModuleLoader::new(module_loader)),
+            npm_resolver: None,
+            get_error_class_fn: Some(&get_error_class_name),
+            origin_storage_dir: None,
+            blob_store: deno_runtime::deno_web::BlobStore::default(),
+            broadcast_channel: deno_broadcast_channel::InMemoryBroadcastChannel::default(),
+            shared_array_buffer_store: None,
+            compiled_wasm_module_store: None,
+            stdio: Default::default(),
+        }
+    }
+}
 
 #[php_class(name = "Deno\\Runtime\\BootstrapOptions")]
+#[derive(Clone)]
 struct BootstrapOptions {
     /// Sets `Deno.args` in JS runtime.
     args: Vec<String>,
@@ -235,43 +194,10 @@ impl RuntimeOptions {
 
 impl From<&RuntimeOptions> for deno_core::RuntimeOptions {
     fn from(options: &RuntimeOptions) -> Self {
-        use deno_core::v8::MapFnTo;
-
         let extensions: Vec<deno_core::Extension> = options
             .extensions
             .iter()
-            .map(|extension| -> deno_core::Extension {
-                let js_files = extension
-                    .js_files
-                    .iter()
-                    .map(|js_file| -> (&str, &str) {
-                        // This causes a memory leak, but the js-files exntesion requires static strings so there's not much we can do.
-                        let filename: &'static str =
-                            Box::leak(js_file.filename.clone().into_boxed_str());
-                        let code: &'static str = Box::leak(js_file.code.clone().into_boxed_str());
-                        (filename, code)
-                    })
-                    .collect();
-                let mut ops: Vec<deno_core::OpDecl> = vec![];
-                for (name, _op) in &extension.ops {
-                    let static_name: &'static str = Box::leak(name.clone().into_boxed_str());
-                    let op_decl = deno_core::OpDecl {
-                        name: static_name,
-                        v8_fn_ptr: op_callback.map_fn_to(),
-                        enabled: true,
-                        fast_fn: None,
-                        is_async: false,
-                        is_unstable: false,
-                        is_v8: false,
-                    };
-
-                    ops.push(op_decl);
-                }
-                deno_core::Extension::builder()
-                    .js(js_files)
-                    .ops(ops)
-                    .build()
-            })
+            .map(|extension|extension.into())
             .collect();
 
         let module_loader: Option<CloneableZval> =
@@ -399,26 +325,23 @@ impl deno_core::ModuleLoader for ModuleLoader {
         referrer: &str,
         _is_main: bool,
     ) -> Result<deno_core::ModuleSpecifier, Error> {
-        let mut hashtable = ext_php_rs::types::ZendHashTable::new();
-        hashtable.insert_at_index(0, (&self.0).clone().into_zval(false).unwrap());
-        hashtable.insert_at_index(1, "resolve");
-
-        let result = ext_php_rs::call_user_func!(
-            hashtable.into_zval(false).unwrap(),
+        let result = call_user_method!(
+            (&self.0).clone().into_zval(false).unwrap(),
+            "resolve",
             specifier,
             referrer,
             _is_main
         );
 
         match result {
-            Ok(result) => match result.string() {
+            Some(result) => match result.string() {
                 Some(result) => match url::Url::parse(result.as_str()) {
                     Ok(result) => Ok(result),
                     Err(err) => anyhow::bail!(err.to_string()),
                 },
                 None => anyhow::bail!("resolve() did not return a valid string."),
             },
-            Err(_) => {
+            None => {
                 anyhow::bail!("resolve() did not return a valid string.")
             }
         }
@@ -430,16 +353,15 @@ impl deno_core::ModuleLoader for ModuleLoader {
         _maybe_referrer: Option<deno_core::ModuleSpecifier>,
         _is_dyn_import: bool,
     ) -> core::pin::Pin<Box<deno_core::ModuleSourceFuture>> {
-        let mut hashtable = ext_php_rs::types::ZendHashTable::new();
-        hashtable.insert_at_index(0, (&self.0).clone().into_zval(false).unwrap());
-        hashtable.insert_at_index(1, "load");
+        let result = call_user_method!(
+            (&self.0).clone().into_zval(false).unwrap(),
+            "load",
+            _module_specifier.to_string().clone()
+        );
 
-        let result = match ext_php_rs::call_user_func!(
-            hashtable.into_zval(false).unwrap(),
-            _module_specifier.to_string()
-        ) {
-            Ok(result) => result,
-            Err(err) => {
+        let result = match result {
+            Some(result) => result,
+            None => {
                 return async {
                     Err(deno_core::error::generic_error(
                         "Error calling load() function on ModuleLoader",
@@ -474,6 +396,36 @@ impl deno_core::ModuleLoader for ModuleLoader {
 
         return async { Ok(module_source) }.boxed_local();
     }
+}
+
+/// Attempts to call a given PHP callable.
+///
+/// # Parameters
+///
+/// * `$fn` - The 'function' to call. Can be an [`Arg`] or a [`Zval`].
+/// * ...`$param` - The parameters to pass to the function. Must be able to be
+///   converted into a [`Zval`].
+///
+/// [`Arg`]: crate::args::Arg
+/// [`Zval`]: crate::types::Zval
+#[macro_export]
+macro_rules! call_user_method {
+    ($class: expr, $method: expr, $($param: expr),*) => {
+        {
+        let mut hashtable = ext_php_rs::types::ZendHashTable::new();
+        hashtable.insert_at_index(0, $class).ok();
+        hashtable.insert_at_index(1, $method).ok();
+
+        let result = hashtable.into_zval(false).unwrap().try_call(vec![$(&$param),*]);
+
+        // let result = ext_php_rs::call_user_func!(
+        //     hashtable.into_zval(false).unwrap(),
+        //     $(&$param),*
+        // );
+
+        result.ok()
+    }
+    };
 }
 
 /// JsFile is a descriptor for JavaScript files that are loaded as
@@ -527,6 +479,47 @@ impl Extension {
             js_files: vec![],
             ops: HashMap::new(),
         }
+    }
+}
+
+impl From<Extension> for deno_core::Extension {
+    fn from(extension: Extension) -> Self {
+        use deno_core::v8::MapFnTo;
+        let js_files = extension
+            .js_files
+            .iter()
+            .map(|js_file| -> (&str, &str) {
+                // This causes a memory leak, but the js-files exntesion requires static strings so there's not much we can do.
+                let filename: &'static str = Box::leak(js_file.filename.clone().into_boxed_str());
+                let code: &'static str = Box::leak(js_file.code.clone().into_boxed_str());
+                (filename, code)
+            })
+            .collect();
+        let mut ops: Vec<deno_core::OpDecl> = vec![];
+        for (name, _op) in &extension.ops {
+            let static_name: &'static str = Box::leak(name.clone().into_boxed_str());
+            let op_decl = deno_core::OpDecl {
+                name: static_name,
+                v8_fn_ptr: op_callback.map_fn_to(),
+                enabled: true,
+                fast_fn: None,
+                is_async: false,
+                is_unstable: false,
+                is_v8: false,
+            };
+
+            ops.push(op_decl);
+        }
+        deno_core::Extension::builder()
+            .js(js_files)
+            .ops(ops)
+            .build()
+    }
+}
+
+impl From<&Extension> for deno_core::Extension {
+    fn from(extension: &Extension) -> Self {
+        extension.clone().into()
     }
 }
 
