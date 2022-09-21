@@ -33,7 +33,9 @@ jobs:
           php-version: '8.1'
     steps:
       - name: Checkout
-        uses: actions/checkout@v1
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v2
