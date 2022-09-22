@@ -94,7 +94,7 @@ impl MainWorker {
 struct WorkerOptions {
     /// The Deno\Runtime\BootstrapOptions containing options for the bootstrap process.
     ///
-    /// @param \Deno\Runtime\BootstrapOptions
+    /// @var \Deno\Runtime\BootstrapOptions
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     bootstrap: BootstrapOptions,
     /// Extensions allow you to add additional functionality via Deno "ops" to the JsRuntime. `extensions` takes an array of
@@ -170,40 +170,40 @@ struct BootstrapOptions {
     /// Sets `Deno.args` in JS runtime.
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     args: Vec<String>,
-    /// @param int
+    /// @var int
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     cpu_count: usize,
-    /// @param bool
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     debug_flag: bool,
-    /// @param bool
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     enable_testing_features: bool,
-    /// @param ?string
+    /// @var ?string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     location: Option<String>,
     /// Sets `Deno.noColor` in JS runtime.
     ///
-    /// @param bool
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     no_color: bool,
-    /// @param bool
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     is_tty: bool,
     /// Sets `Deno.version.deno` in JS runtime.
     ///
-    /// @param string
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     runtime_version: String,
     /// Sets `Deno.version.typescript` in JS runtime.
     ///
-    /// @param string
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     ts_version: String,
-    /// @param bool
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     unstable: bool,
-    /// @param string
+    /// @var string
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     user_agent: String,
 }
@@ -252,38 +252,38 @@ impl TryFrom<&BootstrapOptions> for deno_runtime::BootstrapOptions {
 struct PermissionsOptions {
     /// Allow environment access for things like getting and setting of environment variables. You can specify a list of environment variables to provide an allow-list of allowed environment variables. Pass an empty array to allow all.
     ///
-    /// @param string[]
+    /// @var string[]
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     allow_env: Option<Vec<String>>,
     /// Allow high-resolution time measurement. High-resolution time can be used in timing attacks and fingerprinting.
     ///
-    /// @param bool
+    /// @var bool
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     allow_hrtime: bool,
     /// Allow network access. You can specify an optional list of IP addresses or hostnames (optionally with ports) to provide an allow-list of allowed network addresses. Pass an empty array to allow all.
     ///
-    /// @param string[]
+    /// @var string[]
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     allow_net: Option<Vec<String>>,
     /// Allow loading of dynamic libraries. Be aware that dynamic libraries are not run in a sandbox and therefore do not have the same security restrictions as the Deno process. Therefore, use with caution.
     ///
-    /// @param string[]
+    /// @var string[]
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     allow_ffi: Option<Vec<String>>,
     /// Allow file system read access. You can specify an optional list of directories or files to provide an allow-list of allowed file system access. Pass an empty array to allow all.
     ///
-    /// @param string[]
+    /// @var string[]
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     allow_read: Option<Vec<String>>,
     /// Allow running subprocesses. You can specify an optional list of subprocesses to provide an allow-list of allowed subprocesses.
     /// Be aware that subprocesses are not run in a sandbox and therefore do not have the same security restrictions as the Deno process. Therefore, use with caution. Pass an empty array to allow all.
     ///
-    /// @param string[]
+    /// @var string[]
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     allow_run: Option<Vec<String>>,
     /// Allow file system write access. You can specify an optional list of directories or files to provide an allow-list of allowed file system access. Pass an empty array to allow all.
     ///
-    /// @param string[]
+    /// @var string[]
     #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     allow_write: Option<Vec<String>>,
 }
