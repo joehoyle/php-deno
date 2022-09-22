@@ -6,4 +6,4 @@ This project is similar to [V8Js](https://github.com/phpv8/v8js) in that it prov
 
 PHP-Deno also includes a PHP <-> JavaScript bridge, to expose PHP functions to JavaScript. This is achieved via the [`Extension`](./docs/classes/Core/Extension.md) class.
 
-[View the Documentation →](./docs/Home.md)
+[View the Documentation →](https://joehoyle.github.io/php-deno/)
