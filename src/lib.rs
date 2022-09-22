@@ -20,19 +20,27 @@ fn get_error_class_name(e: &deno_core::error::AnyError) -> &'static str {
 #[php_impl(rename_methods = "none")]
 impl MainWorker {
     #[constructor]
-    fn __construct(main_module: &str, options: &WorkerOptions) -> Self {
+    fn __construct(
+        main_module: &str,
+        permissions: &PermissionsOptions,
+        options: &WorkerOptions,
+    ) -> PhpResult<Self> {
         let main_module = deno_core::resolve_path(main_module).unwrap();
-        let permissions = deno_runtime::permissions::Permissions::allow_all();
+        let permissions =
+            match deno_runtime::permissions::Permissions::from_options(&permissions.into()) {
+                Ok(p) => p,
+                Err(_) => return Err("Unable to parse permissions.".into()),
+            };
 
         let worker = deno_runtime::worker::MainWorker::bootstrap_from_options(
             main_module.clone(),
             permissions,
             options.into(),
         );
-        Self {
+        Ok(Self {
             deno_main_worker: worker,
             main_module: main_module,
-        }
+        })
     }
 
     pub fn execute_main_module(&mut self) -> PhpResult<()> {
@@ -52,18 +60,70 @@ impl MainWorker {
     }
 
     fn run_event_loop(&mut self) -> PhpResult<()> {
-        match futures::executor::block_on(self.deno_main_worker.run_event_loop(false)) {
-            Ok(()) => Ok(()),
-            Err(error) => Err(error.to_string().into()),
-        }
+        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let local = tokio::task::LocalSet::new();
+        local.block_on(&mut rt, async {
+            match self.deno_main_worker.run_event_loop(false).await {
+                Ok(()) => Ok(()),
+                Err(error) => return Err(error.to_string().into()),
+            }
+        })
+    }
+
+    /// Execute JavaSscript inside the V8 Isolate.
+    ///
+    /// This does not support top level await for Es6 imports. use `load_main_module`
+    /// to execute JavaScript in modules.
+    fn execute_script(&mut self, name: &str, source_code: &str) -> PhpResult<()> {
+        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let local = tokio::task::LocalSet::new();
+        local.block_on(&mut rt, async {
+            match self.deno_main_worker.execute_script(name, source_code) {
+                Ok(_) => Ok(()),
+                Err(error) => match error.downcast::<deno_core::error::JsError>() {
+                    Ok(error) => Err(error.exception_message.into()),
+                    Err(error) => Err(error.to_string().into()),
+                },
+            }
+        })
     }
 }
 
+/// The options to provide to Deno\Runtime\MainWorker.
 #[php_class(name = "Deno\\Runtime\\WorkerOptions")]
 struct WorkerOptions {
+    /// The Deno\Runtime\BootstrapOptions containing options for the bootstrap process.
+    ///
+    /// @param \Deno\Runtime\BootstrapOptions
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     bootstrap: BootstrapOptions,
+    /// Extensions allow you to add additional functionality via Deno "ops" to the JsRuntime. `extensions` takes an array of
+    /// Deno\Core\Extension instances. See Deno\Core\Extension for details on the PHP <=> JS functions bridge.
+    ///
+    /// @var Deno\Core\Extension[]
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     extensions: Vec<Extension>,
+    /// The module loader accepts a callable which is responsible for loading
+    /// ES6 modules from a given name. See `Deno\Core\ModuleLoader` for methods that should be implemented.
+    ///
+    /// @var Deno\Core\ModuleLoader
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     module_loader: CloneableZval,
+}
+
+#[php_impl(rename_methods = "none")]
+impl WorkerOptions {
+    fn __construct(
+        bootstrap: &BootstrapOptions,
+        extensions: Vec<Extension>,
+        module_loader: CloneableZval,
+    ) -> Self {
+        Self {
+            bootstrap: bootstrap.clone(),
+            extensions,
+            module_loader,
+        }
+    }
 }
 
 impl From<&WorkerOptions> for deno_runtime::worker::WorkerOptions {
@@ -79,7 +139,7 @@ impl From<&WorkerOptions> for deno_runtime::worker::WorkerOptions {
 
         deno_runtime::worker::WorkerOptions {
             bootstrap: (&options.bootstrap).try_into().unwrap(),
-            extensions: options.extensions.iter().map(|e|e.into()).collect(),
+            extensions: options.extensions.iter().map(|e| e.into()).collect(),
             unsafely_ignore_certificate_errors: None,
             root_cert_store: None,
             seed: None,
@@ -103,26 +163,52 @@ impl From<&WorkerOptions> for deno_runtime::worker::WorkerOptions {
     }
 }
 
-#[php_class(name = "Deno\\Runtime\\BootstrapOptions")]
+/// Common bootstrap options for MainWorker & WebWorker
 #[derive(Clone)]
+#[php_class(name = "Deno\\Runtime\\BootstrapOptions")]
 struct BootstrapOptions {
     /// Sets `Deno.args` in JS runtime.
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     args: Vec<String>,
+    /// @param int
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     cpu_count: usize,
+    /// @param bool
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     debug_flag: bool,
+    /// @param bool
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     enable_testing_features: bool,
+    /// @param ?string
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     location: Option<String>,
     /// Sets `Deno.noColor` in JS runtime.
+    ///
+    /// @param bool
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     no_color: bool,
+    /// @param bool
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     is_tty: bool,
     /// Sets `Deno.version.deno` in JS runtime.
+    ///
+    /// @param string
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     runtime_version: String,
     /// Sets `Deno.version.typescript` in JS runtime.
+    ///
+    /// @param string
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     ts_version: String,
+    /// @param bool
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     unstable: bool,
+    /// @param string
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
     user_agent: String,
 }
 
+#[php_impl(rename_methods = "none")]
 impl BootstrapOptions {
     fn __construct() -> Self {
         BootstrapOptions {
@@ -159,6 +245,85 @@ impl TryFrom<&BootstrapOptions> for deno_runtime::BootstrapOptions {
             unstable: options.unstable,
             user_agent: options.user_agent.clone(),
         })
+    }
+}
+
+#[php_class(name = "Deno\\Runtime\\PermissionsOptions")]
+struct PermissionsOptions {
+    /// Allow environment access for things like getting and setting of environment variables. You can specify a list of environment variables to provide an allow-list of allowed environment variables. Pass an empty array to allow all.
+    ///
+    /// @param string[]
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    allow_env: Option<Vec<String>>,
+    /// Allow high-resolution time measurement. High-resolution time can be used in timing attacks and fingerprinting.
+    ///
+    /// @param bool
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    allow_hrtime: bool,
+    /// Allow network access. You can specify an optional list of IP addresses or hostnames (optionally with ports) to provide an allow-list of allowed network addresses. Pass an empty array to allow all.
+    ///
+    /// @param string[]
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    allow_net: Option<Vec<String>>,
+    /// Allow loading of dynamic libraries. Be aware that dynamic libraries are not run in a sandbox and therefore do not have the same security restrictions as the Deno process. Therefore, use with caution.
+    ///
+    /// @param string[]
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    allow_ffi: Option<Vec<String>>,
+    /// Allow file system read access. You can specify an optional list of directories or files to provide an allow-list of allowed file system access. Pass an empty array to allow all.
+    ///
+    /// @param string[]
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    allow_read: Option<Vec<String>>,
+    /// Allow running subprocesses. You can specify an optional list of subprocesses to provide an allow-list of allowed subprocesses.
+    /// Be aware that subprocesses are not run in a sandbox and therefore do not have the same security restrictions as the Deno process. Therefore, use with caution. Pass an empty array to allow all.
+    ///
+    /// @param string[]
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    allow_run: Option<Vec<String>>,
+    /// Allow file system write access. You can specify an optional list of directories or files to provide an allow-list of allowed file system access. Pass an empty array to allow all.
+    ///
+    /// @param string[]
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    allow_write: Option<Vec<String>>,
+}
+
+#[php_impl(rename_methods = "none")]
+impl PermissionsOptions {
+    fn __construct() -> Self {
+        Self {
+            allow_env: None,
+            allow_hrtime: false,
+            allow_net: None,
+            allow_ffi: None,
+            allow_read: None,
+            allow_run: None,
+            allow_write: None,
+        }
+    }
+}
+
+impl From<&PermissionsOptions> for deno_runtime::permissions::PermissionsOptions {
+    fn from(options: &PermissionsOptions) -> Self {
+        deno_runtime::permissions::PermissionsOptions {
+            allow_env: options.allow_env.clone(),
+            allow_hrtime: options.allow_hrtime,
+            allow_net: options.allow_net.clone(),
+            allow_ffi: options
+                .allow_ffi
+                .clone()
+                .map(|vec| vec.iter().map(|a| std::path::PathBuf::from(a)).collect()),
+            allow_read: options
+                .allow_read
+                .clone()
+                .map(|vec| vec.iter().map(|a| std::path::PathBuf::from(a)).collect()),
+            allow_run: options.allow_run.clone(),
+            allow_write: options
+                .allow_write
+                .clone()
+                .map(|vec| vec.iter().map(|a| std::path::PathBuf::from(a)).collect()),
+            prompt: false,
+        }
     }
 }
 
@@ -210,7 +375,7 @@ impl From<&RuntimeOptions> for deno_core::RuntimeOptions {
         let extensions: Vec<deno_core::Extension> = options
             .extensions
             .iter()
-            .map(|extension|extension.into())
+            .map(|extension| extension.into())
             .collect();
 
         let module_loader: Option<CloneableZval> = match options.module_loader.as_ref() {
@@ -228,8 +393,10 @@ impl From<&RuntimeOptions> for deno_core::RuntimeOptions {
             startup_snapshot: match &options.startup_snapshot {
                 Some(snapshot) => {
                     let snapshot = snapshot.clone().into_zval(false).unwrap().binary().unwrap();
-                    Some(deno_core::Snapshot::Boxed(snapshot.as_slice().to_vec().into_boxed_slice()))
-                },
+                    Some(deno_core::Snapshot::Boxed(
+                        snapshot.as_slice().to_vec().into_boxed_slice(),
+                    ))
+                }
                 None => None,
             },
             ..Default::default()
@@ -280,13 +447,17 @@ impl JsRuntime {
         if self.has_snapshotted {
             return Err("Scripts can not be executed after JsRuntime has been snapshotted.".into());
         }
-        match self.deno_jsruntime.execute_script(name, source_code) {
-            Ok(_) => Ok(()),
-            Err(error) => match error.downcast::<deno_core::error::JsError>() {
-                Ok(error) => Err(error.exception_message.into()),
-                Err(error) => Err(error.to_string().into()),
-            },
-        }
+        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let local = tokio::task::LocalSet::new();
+        local.block_on(&mut rt, async {
+            match self.deno_jsruntime.execute_script(name, source_code) {
+                Ok(_) => Ok(()),
+                Err(error) => match error.downcast::<deno_core::error::JsError>() {
+                    Ok(error) => Err(error.exception_message.into()),
+                    Err(error) => Err(error.to_string().into()),
+                },
+            }
+        })
     }
 
     /// Load an ES6 module as the main starting module.
@@ -303,10 +474,15 @@ impl JsRuntime {
             Ok(specifier) => specifier,
             Err(err) => return Err(err.to_string().into()),
         };
-        match futures::executor::block_on(self.deno_jsruntime.load_main_module(&specifier, code)) {
-            Ok(module) => Ok(module),
-            Err(error) => Err(error.to_string().into()),
-        }
+
+        let mut rt = tokio::runtime::Runtime::new().unwrap();
+        let local = tokio::task::LocalSet::new();
+        local.block_on(&mut rt, async {
+            match self.deno_jsruntime.load_main_module(&specifier, code).await {
+                Ok(module_id) => Ok(module_id),
+                Err(error) => return Err(error.to_string().into()),
+            }
+        })
     }
 
     /// Evaluate a given module ID. This will run all schyonous code in the module.
@@ -338,7 +514,10 @@ impl JsRuntime {
     /// @return string
     fn snapshot(&mut self) -> PhpResult<Zval> {
         if self.will_snapshot == false {
-            return Err("Unable to shapshot JsRuntime when RuntimeOptions.will_snapshot is not true.".into());
+            return Err(
+                "Unable to shapshot JsRuntime when RuntimeOptions.will_snapshot is not true."
+                    .into(),
+            );
         }
         let startup_data = self.deno_jsruntime.snapshot();
         let snapshot_slice: &[u8] = &*startup_data;
@@ -595,6 +774,15 @@ impl FromZval<'_> for Extension {
         let extension: &Extension = zval.extract().unwrap();
         let new_extension = extension.to_owned();
         Some(new_extension)
+    }
+}
+
+impl FromZval<'_> for BootstrapOptions {
+    const TYPE: ext_php_rs::flags::DataType = ext_php_rs::flags::DataType::Mixed;
+    fn from_zval(zval: &'_ Zval) -> Option<Self> {
+        let bootstrap: &BootstrapOptions = zval.extract().unwrap();
+        let new_bootstrap = bootstrap.to_owned();
+        Some(new_bootstrap)
     }
 }
 
