@@ -81,7 +81,9 @@ impl MainWorker {
             match self.deno_main_worker.execute_script(name, source_code) {
                 Ok(_) => Ok(()),
                 Err(error) => match error.downcast::<deno_core::error::JsError>() {
-                    Ok(error) => Err(error.exception_message.into()),
+                    Ok(error) => {
+                        Err(JsException::from(error).into())
+                    },
                     Err(error) => Err(error.to_string().into()),
                 },
             }
@@ -89,8 +91,72 @@ impl MainWorker {
     }
 }
 
+#[php_class(name = "Deno\\Core\\JsException")]
+#[extends(ext_php_rs::zend::ce::exception())]
+#[derive(Default, Clone)]
+pub struct JsException {
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Protected)]
+    message: String,
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Public)]
+    code: i32,
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Protected)]
+    file: String,
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Protected)]
+    line: i64,
+    #[prop(flags = ext_php_rs::flags::PropertyFlags::Protected)]
+    trace: Vec<String>,
+}
+
+impl From<JsException> for PhpException {
+    fn from(js_exception: JsException) -> Self {
+        use ext_php_rs::class::RegisteredClass;
+        let code = js_exception.code.clone();
+        let message = js_exception.message.clone();
+        let zval = js_exception.into_zval(true).unwrap();
+        let mut php_exception = PhpException::new( message, code, JsException::get_metadata().ce() );
+        php_exception.set_object(Some(zval.into()));
+        php_exception
+    }
+}
+
+impl From<deno_core::error::JsError> for JsException {
+    fn from(error: deno_core::error::JsError) -> Self {
+        let source = match error.frames.get(0) {
+            Some(frame) => (frame.file_name.clone().unwrap_or("unknown".to_string()),frame.line_number.unwrap_or(0)),
+            None => ("unknown".to_string(),0)
+        };
+
+        let stack = error.frames.into_iter().map( |frame| {
+            format!("{}:{}", frame.file_name.unwrap_or("unknown".to_string()), frame.line_number.unwrap_or(0) )
+
+        } ).collect::<Vec<String>>();
+
+        JsException {
+            message: error.message.unwrap_or("Unknown JavaScript error.".to_string()),
+            code: 0,
+            file: source.0,
+            line: source.1,
+            trace: stack,
+        }
+    }
+}
+
+#[php_impl]
+impl JsException {
+    fn __construct() -> Self {
+        Self {
+            message: "JSError happened".to_owned(),
+            code: 0,
+            file: "".to_owned(),
+            line: 0,
+            trace: vec![],
+        }
+    }
+}
+
 /// The options to provide to Deno\Runtime\MainWorker.
 #[php_class(name = "Deno\\Runtime\\WorkerOptions")]
+#[derive(Debug)]
 struct WorkerOptions {
     /// The Deno\Runtime\BootstrapOptions containing options for the bootstrap process.
     ///
@@ -164,7 +230,7 @@ impl From<&WorkerOptions> for deno_runtime::worker::WorkerOptions {
 }
 
 /// Common bootstrap options for MainWorker & WebWorker
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[php_class(name = "Deno\\Runtime\\BootstrapOptions")]
 struct BootstrapOptions {
     /// Sets `Deno.args` in JS runtime.
@@ -453,7 +519,9 @@ impl JsRuntime {
             match self.deno_jsruntime.execute_script(name, source_code) {
                 Ok(_) => Ok(()),
                 Err(error) => match error.downcast::<deno_core::error::JsError>() {
-                    Ok(error) => Err(error.exception_message.into()),
+                    Ok(error) => {
+                        Err(JsException::from(error).into())
+                    },
                     Err(error) => Err(error.to_string().into()),
                 },
             }
